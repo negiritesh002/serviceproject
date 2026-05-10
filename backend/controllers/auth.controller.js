@@ -55,42 +55,48 @@ const sendCustomerSignupOtp = async (req, res, next) => {
       });
     }
 
-    if (!isSmsOtpConfigured()) {
+    const otp = generateOtp();
+    let smsSent = false;
+
+    if (isSmsOtpConfigured()) {
+      try {
+        const result = await sendSmsOtp(phone, otp);
+        if (result?.Status === 'Success') {
+          smsSent = true;
+        } else if (process.env.NODE_ENV === 'production') {
+          return res.status(502).json({
+            success: false,
+            message: 'Failed to send OTP. Please try again or check your phone number.'
+          });
+        }
+      } catch (smsError) {
+        if (process.env.NODE_ENV === 'production') {
+          return res.status(502).json({
+            success: false,
+            message: `OTP sending failed: ${smsError.message}`
+          });
+        }
+      }
+    } else if (process.env.NODE_ENV === 'production') {
       return res.status(503).json({
         success: false,
-        message: 'SMS OTP service is not configured. Please contact support or configure TWO_FACTOR_API_KEY in .env'
+        message: 'SMS OTP service is not configured. Please configure TWO_FACTOR_API_KEY.'
       });
     }
 
-    const otp = generateOtp();
-    
-    // FIX: Properly handle sendSmsOtp errors
-    try {
-      const result = await sendSmsOtp(phone, otp);
-      
-      // Check if the SMS API call was successful
-      if (!result || !result.Status || result.Status !== 'Success') {
-        console.error('SMS OTP failed:', result);
-        return res.status(502).json({
-          success: false,
-          message: 'Failed to send OTP. Please try again or check your phone number.'
-        });
-      }
-      
-      // Only save OTP if SMS was sent successfully
-      saveOtp(phone, otp);
+    saveOtp(phone, otp);
 
-      return res.status(200).json({
-        success: true,
-        message: 'OTP sent successfully to your phone number'
-      });
-    } catch (smsError) {
-      console.error('SMS OTP Error:', smsError.message);
-      return res.status(502).json({
-        success: false,
-        message: `OTP sending failed: ${smsError.message}. Please check your phone number and try again.`
-      });
+    const response = {
+      success: true,
+      message: smsSent ? 'OTP sent successfully to your phone number' : 'OTP generated successfully for development mode'
+    };
+
+    if (process.env.NODE_ENV !== 'production') {
+      response.devOtp = otp;
+      response.delivery = smsSent ? 'sms+dev-copy' : 'dev-only';
     }
+
+    return res.status(200).json(response);
   } catch (error) {
     next(error);
   }

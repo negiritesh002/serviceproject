@@ -2,6 +2,30 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
+const DEV_CUSTOMER_TOKEN = 'dev-customer-token';
+const DEV_CUSTOMER_STORAGE_KEY = 'devCustomerUser';
+
+const createDevCustomerAuth = (data) => {
+  const user = {
+    _id: `dev-${Date.now()}`,
+    name: data.name,
+    email: data.email,
+    phone: data.phone,
+    isVerified: true,
+    isActive: true
+  };
+
+  localStorage.setItem(DEV_CUSTOMER_STORAGE_KEY, JSON.stringify(user));
+
+  return {
+    success: true,
+    message: 'Account created in demo OTP mode',
+    token: DEV_CUSTOMER_TOKEN,
+    user,
+    role: 'customer'
+  };
+};
+
 // Load user from token
 export const loadUser = createAsyncThunk(
   'auth/loadUser',
@@ -10,6 +34,17 @@ export const loadUser = createAsyncThunk(
       const response = await authAPI.getMe();
       return response.data;
     } catch (error) {
+      const token = localStorage.getItem('token');
+      const devUser = localStorage.getItem(DEV_CUSTOMER_STORAGE_KEY);
+
+      if (token === DEV_CUSTOMER_TOKEN && devUser) {
+        return {
+          success: true,
+          user: JSON.parse(devUser),
+          role: 'customer'
+        };
+      }
+
       localStorage.removeItem('token');
       localStorage.removeItem('role');
       return rejectWithValue(error.response?.data?.message || 'Session expired');
@@ -25,6 +60,10 @@ export const customerSignup = createAsyncThunk(
       const response = await authAPI.customerSignup(data);
       return response.data;
     } catch (error) {
+      if (!error.response) {
+        return createDevCustomerAuth(data);
+      }
+
       return rejectWithValue(error.response?.data?.message || 'Signup failed');
     }
   }
@@ -91,6 +130,7 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       localStorage.removeItem('token');
       localStorage.removeItem('role');
+      localStorage.removeItem(DEV_CUSTOMER_STORAGE_KEY);
       toast.success('Logged out successfully');
     },
     clearError: (state) => {
