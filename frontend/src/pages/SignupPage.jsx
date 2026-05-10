@@ -1,20 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import toast from 'react-hot-toast';
 import { ArrowLeft, ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail, Phone, Shield, User } from 'lucide-react';
 import { customerSignup } from '../redux/slices/authSlice';
-import { firebaseAuth } from '../config/firebase';
+import { authAPI } from '../services/api';
 
 const SignupPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { isAuthenticated, signupLoading, role } = useSelector(state => state.auth);
-  const recaptchaRef = useRef(null);
 
   const [step, setStep] = useState(1);
-  const [confirmationResult, setConfirmationResult] = useState(null);
   const [firebaseLoading, setFirebaseLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
@@ -32,23 +29,6 @@ const SignupPage = () => {
       navigate('/customer');
     }
   }, [isAuthenticated, navigate, role]);
-
-  useEffect(() => {
-    if (!recaptchaRef.current) {
-      recaptchaRef.current = new RecaptchaVerifier(firebaseAuth, 'recaptcha-container', {
-        size: 'invisible'
-      });
-    }
-
-    return () => {
-      try {
-        recaptchaRef.current?.clear();
-      } catch (error) {
-        console.warn('Failed to clear reCAPTCHA verifier during cleanup', error);
-      }
-      recaptchaRef.current = null;
-    };
-  }, []);
 
   const validateDetails = () => {
     const nextErrors = {};
@@ -76,31 +56,23 @@ const SignupPage = () => {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const getRecaptchaVerifier = () => {
-    if (!recaptchaRef.current) {
-      recaptchaRef.current = new RecaptchaVerifier(firebaseAuth, 'recaptcha-container', {
-        size: 'invisible'
-      });
-    }
-
-    return recaptchaRef.current;
-  };
-
-  const handleSendFirebaseOTP = async (event) => {
+  const handleSendOtp = async (event) => {
     event.preventDefault();
     if (!validateDetails()) return;
 
     setFirebaseLoading(true);
     try {
-      const verifier = getRecaptchaVerifier();
-      const result = await signInWithPhoneNumber(firebaseAuth, `+91${formData.phone}`, verifier);
-      setConfirmationResult(result);
+      const response = await authAPI.sendCustomerOtp({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password
+      });
+
       setStep(2);
-      toast.success('OTP sent successfully');
+      toast.success(response.data.message || 'OTP sent successfully');
     } catch (error) {
-      recaptchaRef.current?.clear();
-      recaptchaRef.current = null;
-      toast.error(error.message || 'Failed to send OTP');
+      toast.error(error.response?.data?.message || 'Failed to send OTP');
     } finally {
       setFirebaseLoading(false);
     }
@@ -109,12 +81,6 @@ const SignupPage = () => {
   const handleCreateAccount = async (event) => {
     event.preventDefault();
 
-    if (!confirmationResult) {
-      toast.error('Please request OTP again');
-      setStep(1);
-      return;
-    }
-
     if (!/^\d{6}$/.test(formData.otp)) {
       setErrors({ otp: 'Please enter the 6-digit OTP' });
       return;
@@ -122,15 +88,12 @@ const SignupPage = () => {
 
     setFirebaseLoading(true);
     try {
-      const credential = await confirmationResult.confirm(formData.otp);
-      const firebaseIdToken = await credential.user.getIdToken(true);
-
       dispatch(customerSignup({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
         password: formData.password,
-        firebaseIdToken
+        otp: formData.otp
       }));
     } catch (error) {
       toast.error(error.message || 'Invalid OTP');
@@ -147,7 +110,6 @@ const SignupPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center py-12 px-4">
-      <div id="recaptcha-container" />
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center space-x-2 mb-6">
@@ -174,7 +136,7 @@ const SignupPage = () => {
 
         <div className="bg-white rounded-3xl shadow-xl p-8">
           {step === 1 ? (
-            <form onSubmit={handleSendFirebaseOTP} className="space-y-4">
+            <form onSubmit={handleSendOtp} className="space-y-4">
               <h2 className="text-lg font-bold text-gray-800 mb-4">Your Details</h2>
 
               <div>
@@ -229,7 +191,7 @@ const SignupPage = () => {
               </div>
 
               <button type="submit" disabled={firebaseLoading} className="btn-primary w-full mt-6 flex items-center justify-center space-x-2">
-                {firebaseLoading ? <><div className="w-5 h-5 loading-spinner" /><span>Sending OTP...</span></> : <><span>Send Firebase OTP</span><ArrowRight size={18} /></>}
+                {firebaseLoading ? <><div className="w-5 h-5 loading-spinner" /><span>Sending OTP...</span></> : <><span>Send OTP</span><ArrowRight size={18} /></>}
               </button>
             </form>
           ) : (
@@ -239,7 +201,7 @@ const SignupPage = () => {
                   <Phone size={28} className="text-green-600" />
                 </div>
                 <h2 className="text-lg font-bold text-gray-800">Verify Your Phone</h2>
-                <p className="text-gray-500 text-sm mt-1">Firebase sent an OTP to <span className="font-semibold text-gray-800">+91 {formData.phone}</span></p>
+                <p className="text-gray-500 text-sm mt-1">We sent an OTP to <span className="font-semibold text-gray-800">+91 {formData.phone}</span></p>
               </div>
 
               <div>

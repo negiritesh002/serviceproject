@@ -41,6 +41,7 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
+  sendCustomerOtp: (data) => api.post('/auth/customer/send-otp', data),
   customerSignup: (data) => api.post('/auth/customer/signup', data),
   customerLogin: (data) => api.post('/auth/customer/login', data),
   vendorSignup: (data) => api.post('/auth/vendor/signup', data),

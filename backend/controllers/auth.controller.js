@@ -3,7 +3,8 @@ const Vendor = require('../models/Vendor.model');
 const Service = require('../models/Service.model');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
-const { verifyFirebaseIdToken } = require('../config/firebaseAuth');
+const { generateOtp, saveOtp, verifyOtp } = require('../utils/customerOtp.util');
+const { isSmsOtpConfigured, sendSmsOtp } = require('../utils/smsOtp.util');
 
 // Generate JWT Token
 const generateToken = (id, role) => {
@@ -16,12 +17,65 @@ const generateToken = (id, role) => {
 
 // ==================== CUSTOMER AUTH ====================
 
-const normalizeFirebasePhone = (phoneNumber) => {
-  const digits = String(phoneNumber || '').replace(/\D/g, '');
-  return digits.startsWith('91') && digits.length === 12 ? digits.slice(2) : digits;
+// @desc    Send customer signup OTP
+// @route   POST /api/auth/customer/send-otp
+// @access  Public
+const sendCustomerSignupOtp = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { phone, email } = req.body;
+
+    let existingCustomer = null;
+
+    if (Customer.db.readyState === 1) {
+      existingCustomer = await Customer.findOne({
+        $or: [{ phone }, { email }]
+      });
+    }
+
+    if (existingCustomer?.phone === phone && existingCustomer.isVerified) {
+      return res.status(409).json({
+        success: false,
+        message: 'Phone already registered'
+      });
+    }
+
+    if (existingCustomer?.email === email && existingCustomer.isVerified) {
+      return res.status(409).json({
+        success: false,
+        message: 'Email already registered'
+      });
+    }
+
+    if (!isSmsOtpConfigured()) {
+      return res.status(503).json({
+        success: false,
+        message: 'SMS OTP service is not configured'
+      });
+    }
+
+    const otp = generateOtp();
+    await sendSmsOtp(phone, otp);
+    saveOtp(phone, otp);
+
+    return res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully to your phone number'
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
-// @desc    Verify Firebase phone OTP and complete customer signup
+// @desc    Verify customer OTP and complete customer signup
 // @route   POST /api/auth/customer/signup
 // @access  Public
 const customerSignup = async (req, res, next) => {
@@ -35,24 +89,20 @@ const customerSignup = async (req, res, next) => {
       });
     }
 
-    const { phone, name, email, password, firebaseIdToken } = req.body;
-    let decodedToken;
+    const { phone, name, email, password, otp } = req.body;
+    const otpCheck = verifyOtp(phone, otp);
 
-    try {
-      decodedToken = await verifyFirebaseIdToken(firebaseIdToken);
-    } catch (error) {
+    if (!otpCheck.valid) {
       return res.status(401).json({
         success: false,
-        message: 'Firebase phone verification failed. Please request a new OTP.'
+        message: otpCheck.message
       });
     }
 
-    const verifiedPhone = normalizeFirebasePhone(decodedToken.phone_number);
-
-    if (!decodedToken.phone_number || verifiedPhone !== phone) {
-      return res.status(401).json({
+    if (Customer.db.readyState !== 1) {
+      return res.status(503).json({
         success: false,
-        message: 'Firebase phone verification does not match this phone number'
+        message: 'Database is temporarily unavailable. Please try again in a moment.'
       });
     }
 
@@ -317,6 +367,7 @@ const getMe = async (req, res, next) => {
 };
 
 module.exports = {
+  sendCustomerSignupOtp,
   customerSignup,
   customerLogin,
   vendorSignup,
