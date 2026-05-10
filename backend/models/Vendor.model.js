@@ -93,12 +93,7 @@ const vendorSchema = new mongoose.Schema({
     cancelledBookings: { type: Number, default: 0 },
     totalEarnings: { type: Number, default: 0 }
   },
-  lastLogin: Date,
-  otp: {
-    code: String,
-    expiresAt: Date,
-    attempts: { type: Number, default: 0 }
-  }
+  lastLogin: Date
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -118,23 +113,9 @@ vendorSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-vendorSchema.methods.generateOTP = function() {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expireMinutes = parseInt(process.env.OTP_EXPIRE_MINUTES) || 10;
-  
-  this.otp = {
-    code: otp,
-    expiresAt: new Date(Date.now() + expireMinutes * 60 * 1000),
-    attempts: 0
-  };
-  
-  return otp;
-};
-
 vendorSchema.methods.toSafeObject = function() {
   const obj = this.toObject();
   delete obj.password;
-  delete obj.otp;
   return obj;
 };
 

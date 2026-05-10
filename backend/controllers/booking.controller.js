@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Booking = require('../models/Booking.model');
 const Service = require('../models/Service.model');
 const Vendor = require('../models/Vendor.model');
@@ -370,9 +371,9 @@ const updateBookingStatus = async (req, res, next) => {
   }
 };
 
-// @desc    Cancel booking (Customer)
+// @desc    Cancel booking (Customer or Vendor)
 // @route   PATCH /api/bookings/:id/cancel
-// @access  Private (Customer)
+// @access  Private (Customer/Vendor)
 const cancelBooking = async (req, res, next) => {
   try {
     const { reason } = req.body;
@@ -386,7 +387,10 @@ const cancelBooking = async (req, res, next) => {
       });
     }
 
-    if (booking.customer.toString() !== req.user.id) {
+    const isCustomer = booking.customer.toString() === req.user.id;
+    const isVendor = booking.vendor.toString() === req.user.id;
+
+    if (!isCustomer && !isVendor) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized'
@@ -402,17 +406,28 @@ const cancelBooking = async (req, res, next) => {
 
     booking.status = 'cancelled';
     booking.cancellation = {
-      reason: reason || 'Customer requested cancellation',
-      cancelledBy: 'customer',
+      reason: reason || `${req.user.role === 'vendor' ? 'Vendor' : 'Customer'} requested cancellation`,
+      cancelledBy: req.user.role,
       cancelledAt: new Date()
     };
 
+    if (isVendor) {
+      await Vendor.findByIdAndUpdate(req.user.id, {
+        $inc: { 'stats.cancelledBookings': 1 }
+      });
+    }
+
     await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('service', 'title category price images description')
+      .populate('vendor', 'businessName ownerName phone email rating avatar category')
+      .populate('customer', 'name phone email avatar');
 
     res.status(200).json({
       success: true,
       message: 'Booking cancelled successfully',
-      booking
+      booking: updatedBooking
     });
 
   } catch (error) {
@@ -449,9 +464,9 @@ const getVendorStats = async (req, res, next) => {
     ]);
 
     const earnings = await Booking.aggregate([
-      { $match: { vendor: require('mongoose').Types.ObjectId(vendorId), status: 'completed' } },
-      { $group: { _id: null, total: { $sum: '$pricing.totalAmount' } } }
-    ]);
+  { $match: { vendor: new mongoose.Types.ObjectId(vendorId), status: 'completed' } },
+  { $group: { _id: null, total: { $sum: '$pricing.totalAmount' } } }
+]);
 
     res.status(200).json({
       success: true,

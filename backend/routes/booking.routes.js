@@ -17,7 +17,7 @@ router.use(protect);
 // Customer routes
 router.post('/', authorize('customer'), validateBooking, createBooking);
 router.get('/customer', authorize('customer'), getCustomerBookings);
-router.patch('/:id/cancel', authorize('customer'), cancelBooking);
+router.patch('/:id/cancel', authorize('customer', 'vendor'), cancelBooking);
 
 // Vendor routes
 router.get('/vendor', authorize('vendor'), getVendorBookings);

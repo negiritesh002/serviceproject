@@ -1,9 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import BookingCard from '../../components/BookingCard';
-import { fetchVendorBookings, updateBookingStatus } from '../../redux/slices/bookingsSlice';
+import { cancelBooking, fetchVendorBookings, updateBookingStatus } from '../../redux/slices/bookingsSlice';
 
 const statuses = ['', 'pending', 'accepted', 'in_progress', 'completed', 'rejected', 'cancelled'];
+const actionLabels = {
+  accepted: 'Accept',
+  rejected: 'Reject',
+  in_progress: 'Start',
+  completed: 'Complete'
+};
 
 const VendorBookingsPage = () => {
   const dispatch = useDispatch();
@@ -48,9 +54,17 @@ const VendorBookingsPage = () => {
                       onClick={() => dispatch(updateBookingStatus({ id: booking._id, status: action }))}
                       className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-sm font-semibold text-gray-700 hover:border-red-300 hover:text-red-600"
                     >
-                      {action.replace('_', ' ')}
+                      {actionLabels[action] || action.replace('_', ' ')}
                     </button>
                   ))}
+                  {['pending', 'accepted'].includes(booking.status) && (
+                    <button
+                      onClick={() => dispatch(cancelBooking({ id: booking._id, reason: 'Vendor cancelled the booking' }))}
+                      className="px-4 py-2 rounded-xl bg-red-50 border border-red-100 text-sm font-semibold text-red-600 hover:bg-red-100"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               )}
             </div>

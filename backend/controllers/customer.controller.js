@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Customer = require('../models/Customer.model');
 const Booking = require('../models/Booking.model');
 
@@ -70,9 +71,9 @@ const getDashboardStats = async (req, res, next) => {
       .limit(5);
 
     const spending = await Booking.aggregate([
-      { $match: { customer: require('mongoose').Types.ObjectId(customerId), status: 'completed' } },
-      { $group: { _id: null, total: { $sum: '$pricing.totalAmount' } } }
-    ]);
+  { $match: { customer: new mongoose.Types.ObjectId(customerId), status: 'completed' } },
+  { $group: { _id: null, total: { $sum: '$pricing.totalAmount' } } }
+]);
 
     res.status(200).json({
       success: true,

@@ -62,7 +62,7 @@ const getAllVendors = async (req, res, next) => {
     if (city) query['address.city'] = new RegExp(city, 'i');
 
     const vendors = await Vendor.find(query)
-      .select('-password -otp -bankDetails -documents')
+      .select('-password -bankDetails -documents')
       .sort({ 'rating.average': -1 });
 
     res.status(200).json({

@@ -1,11 +1,9 @@
 const Customer = require('../models/Customer.model');
 const Vendor = require('../models/Vendor.model');
 const Service = require('../models/Service.model');
-const OTP = require('../models/OTP.model');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
-const { sendOTP, generateOTPCode } = require('../utils/otp.util');
-const { createError } = require('../utils/error.util');
+const { verifyFirebaseIdToken } = require('../config/firebaseAuth');
 
 // Generate JWT Token
 const generateToken = (id, role) => {
@@ -18,10 +16,15 @@ const generateToken = (id, role) => {
 
 // ==================== CUSTOMER AUTH ====================
 
-// @desc    Send OTP for customer signup
-// @route   POST /api/auth/customer/send-otp
+const normalizeFirebasePhone = (phoneNumber) => {
+  const digits = String(phoneNumber || '').replace(/\D/g, '');
+  return digits.startsWith('91') && digits.length === 12 ? digits.slice(2) : digits;
+};
+
+// @desc    Verify Firebase phone OTP and complete customer signup
+// @route   POST /api/auth/customer/signup
 // @access  Public
-const customerSendOTP = async (req, res, next) => {
+const customerSignup = async (req, res, next) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -32,98 +35,26 @@ const customerSendOTP = async (req, res, next) => {
       });
     }
 
-    const { phone, email } = req.body;
+    const { phone, name, email, password, firebaseIdToken } = req.body;
+    let decodedToken;
 
-    // Check if customer already exists
-    const existingCustomer = await Customer.findOne({
-      $or: [{ phone }, { email }]
-    });
-
-    if (existingCustomer && existingCustomer.isVerified) {
-      return res.status(409).json({
+    try {
+      decodedToken = await verifyFirebaseIdToken(firebaseIdToken);
+    } catch (error) {
+      return res.status(401).json({
         success: false,
-        message: 'Account already exists with this phone/email. Please login.'
+        message: 'Firebase phone verification failed. Please request a new OTP.'
       });
     }
 
-    // Generate OTP
-    const otpCode = generateOTPCode();
-    const expiresAt = new Date(Date.now() + (parseInt(process.env.OTP_EXPIRE_MINUTES) || 10) * 60 * 1000);
+    const verifiedPhone = normalizeFirebasePhone(decodedToken.phone_number);
 
-    // Save/Update OTP in database
-    await OTP.findOneAndUpdate(
-      { identifier: phone, purpose: 'signup', userType: 'customer' },
-      {
-        identifier: phone,
-        type: 'phone',
-        otp: otpCode,
-        purpose: 'signup',
-        userType: 'customer',
-        attempts: 0,
-        isUsed: false,
-        expiresAt
-      },
-      { upsert: true, new: true }
-    );
-
-    await sendOTP(phone, otpCode, 'signup');
-
-    res.status(200).json({
-      success: true,
-      message: `OTP sent successfully to ${phone}`
-    });
-
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Verify OTP and complete customer signup
-// @route   POST /api/auth/customer/verify-otp
-// @access  Public
-const customerVerifyOTP = async (req, res, next) => {
-  try {
-    const { phone, otp, name, email, password } = req.body;
-
-    // Find OTP record
-    const otpRecord = await OTP.findOne({
-      identifier: phone,
-      purpose: 'signup',
-      userType: 'customer',
-      isUsed: false
-    });
-
-    if (!otpRecord) {
-      return res.status(400).json({
+    if (!decodedToken.phone_number || verifiedPhone !== phone) {
+      return res.status(401).json({
         success: false,
-        message: 'OTP not found. Please request a new OTP.'
+        message: 'Firebase phone verification does not match this phone number'
       });
     }
-
-    if (new Date() > otpRecord.expiresAt) {
-      return res.status(400).json({
-        success: false,
-        message: 'OTP has expired. Please request a new one.'
-      });
-    }
-
-    if (otpRecord.attempts >= 3) {
-      return res.status(400).json({
-        success: false,
-        message: 'Maximum attempts exceeded. Please request a new OTP.'
-      });
-    }
-
-    if (otpRecord.otp !== otp) {
-      await OTP.findByIdAndUpdate(otpRecord._id, { $inc: { attempts: 1 } });
-      return res.status(400).json({
-        success: false,
-        message: `Invalid OTP. ${3 - otpRecord.attempts - 1} attempts remaining.`
-      });
-    }
-
-    // Mark OTP as used
-    await OTP.findByIdAndUpdate(otpRecord._id, { isUsed: true });
 
     // Create or update customer
     let customer = await Customer.findOne({ phone });
@@ -386,8 +317,7 @@ const getMe = async (req, res, next) => {
 };
 
 module.exports = {
-  customerSendOTP,
-  customerVerifyOTP,
+  customerSignup,
   customerLogin,
   vendorSignup,
   vendorLogin,

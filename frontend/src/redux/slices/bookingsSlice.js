@@ -174,6 +174,7 @@ const bookingsSlice = createSlice({
         state.bookings = state.bookings.map(b =>
           b._id === updated._id ? updated : b
         );
+        state.currentBooking = updated;
         toast.success('Booking cancelled successfully');
       })
       .addCase(cancelBooking.rejected, (state, action) => {

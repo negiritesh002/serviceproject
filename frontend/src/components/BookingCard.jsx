@@ -17,9 +17,12 @@ const BookingCard = ({ booking, role = 'customer' }) => {
   const service = booking.service;
   const vendor = booking.vendor;
   const customer = booking.customer;
+  const detailPath = role === 'vendor'
+    ? `/vendor/bookings/${booking._id}`
+    : `/customer/bookings/${booking._id}`;
 
   return (
-    <Link to={`/customer/bookings/${booking._id}`} className="block">
+    <Link to={detailPath} className="block">
       <div className="card p-5 hover:shadow-card-hover transition-all">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-start space-x-3">

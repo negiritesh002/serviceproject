@@ -51,14 +51,6 @@ const customerSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  otp: {
-    code: String,
-    expiresAt: Date,
-    attempts: {
-      type: Number,
-      default: 0
-    }
-  },
   bookingsCount: {
     type: Number,
     default: 0
@@ -99,51 +91,10 @@ customerSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Generate OTP
-customerSchema.methods.generateOTP = function() {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expireMinutes = parseInt(process.env.OTP_EXPIRE_MINUTES) || 10;
-  
-  this.otp = {
-    code: otp,
-    expiresAt: new Date(Date.now() + expireMinutes * 60 * 1000),
-    attempts: 0
-  };
-  
-  return otp;
-};
-
-// Verify OTP
-customerSchema.methods.verifyOTP = function(inputOtp) {
-  if (!this.otp || !this.otp.code) {
-    return { success: false, message: 'OTP not found' };
-  }
-  
-  if (this.otp.attempts >= 3) {
-    return { success: false, message: 'Maximum OTP attempts exceeded' };
-  }
-  
-  if (new Date() > this.otp.expiresAt) {
-    return { success: false, message: 'OTP has expired' };
-  }
-  
-  this.otp.attempts += 1;
-  
-  if (this.otp.code !== inputOtp) {
-    return { success: false, message: 'Invalid OTP' };
-  }
-  
-  this.otp = undefined;
-  this.isVerified = true;
-  
-  return { success: true, message: 'OTP verified successfully' };
-};
-
 // Remove sensitive fields from JSON output
 customerSchema.methods.toSafeObject = function() {
   const obj = this.toObject();
   delete obj.password;
-  delete obj.otp;
   return obj;
 };
 

@@ -22,6 +22,7 @@ import CustomerProfilePage from './pages/customer/CustomerProfilePage';
 // Vendor Pages
 import VendorDashboard from './pages/vendor/VendorDashboard';
 import VendorBookingsPage from './pages/vendor/VendorBookingsPage';
+import VendorBookingDetailPage from './pages/vendor/VendorBookingDetailPage';
 import VendorProfilePage from './pages/vendor/VendorProfilePage';
 
 // Components
@@ -98,6 +99,11 @@ function App() {
             <Route path="/vendor/bookings" element={
               <ProtectedRoute role="vendor">
                 <VendorBookingsPage />
+              </ProtectedRoute>
+            } />
+            <Route path="/vendor/bookings/:id" element={
+              <ProtectedRoute role="vendor">
+                <VendorBookingDetailPage />
               </ProtectedRoute>
             } />
             <Route path="/vendor/profile" element={

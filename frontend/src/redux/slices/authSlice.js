@@ -17,25 +17,12 @@ export const loadUser = createAsyncThunk(
   }
 );
 
-// Customer send OTP
-export const sendOTP = createAsyncThunk(
-  'auth/sendOTP',
-  async (data, { rejectWithValue }) => {
-    try {
-      const response = await authAPI.sendOTP(data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to send OTP');
-    }
-  }
-);
-
-// Customer verify OTP & signup
+// Customer signup after Firebase phone verification
 export const customerSignup = createAsyncThunk(
   'auth/customerSignup',
   async (data, { rejectWithValue }) => {
     try {
-      const response = await authAPI.verifyOTP(data);
+      const response = await authAPI.customerSignup(data);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Signup failed');
@@ -88,8 +75,6 @@ const initialState = {
   token: localStorage.getItem('token') || null,
   isAuthenticated: false,
   isLoading: !!localStorage.getItem('token'),
-  otpSent: false,
-  otpLoading: false,
   loginLoading: false,
   signupLoading: false,
   error: null
@@ -104,16 +89,12 @@ const authSlice = createSlice({
       state.role = null;
       state.token = null;
       state.isAuthenticated = false;
-      state.otpSent = false;
       localStorage.removeItem('token');
       localStorage.removeItem('role');
       toast.success('Logged out successfully');
     },
     clearError: (state) => {
       state.error = null;
-    },
-    resetOTPState: (state) => {
-      state.otpSent = false;
     },
     updateUser: (state, action) => {
       state.user = { ...state.user, ...action.payload };
@@ -137,23 +118,6 @@ const authSlice = createSlice({
         state.user = null;
         state.token = null;
         state.role = null;
-      });
-
-    // Send OTP
-    builder
-      .addCase(sendOTP.pending, (state) => {
-        state.otpLoading = true;
-        state.error = null;
-      })
-      .addCase(sendOTP.fulfilled, (state, action) => {
-        state.otpLoading = false;
-        state.otpSent = true;
-        toast.success(action.payload.message);
-      })
-      .addCase(sendOTP.rejected, (state, action) => {
-        state.otpLoading = false;
-        state.error = action.payload;
-        toast.error(action.payload);
       });
 
     // Customer Signup
@@ -242,5 +206,5 @@ const authSlice = createSlice({
   }
 });
 
-export const { logout, clearError, resetOTPState, updateUser } = authSlice.actions;
+export const { logout, clearError, updateUser } = authSlice.actions;
 export default authSlice.reducer;
