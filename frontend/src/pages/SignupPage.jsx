@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
-import { ArrowLeft, ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail, Phone, Shield, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle, Eye, EyeOff, Lock, Mail, Phone, Shield, User, AlertCircle } from 'lucide-react';
 import { customerSignup } from '../redux/slices/authSlice';
 import { authAPI } from '../services/api';
 
@@ -15,6 +15,7 @@ const SignupPage = () => {
   const [firebaseLoading, setFirebaseLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
+  const [otpError, setOtpError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -61,6 +62,7 @@ const SignupPage = () => {
     if (!validateDetails()) return;
 
     setFirebaseLoading(true);
+    setOtpError('');
     try {
       const response = await authAPI.sendCustomerOtp({
         name: formData.name,
@@ -69,10 +71,19 @@ const SignupPage = () => {
         password: formData.password
       });
 
-      setStep(2);
-      toast.success(response.data.message || 'OTP sent successfully');
+      if (response.data.success) {
+        setStep(2);
+        toast.success(response.data.message || 'OTP sent successfully');
+      } else {
+        // If backend returns success: false with a message
+        setOtpError(response.data.message || 'Failed to send OTP');
+        toast.error(response.data.message || 'Failed to send OTP');
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to send OTP');
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to send OTP';
+      setOtpError(errorMessage);
+      toast.error(errorMessage);
+      console.error('OTP Send Error:', error);
     } finally {
       setFirebaseLoading(false);
     }
@@ -106,6 +117,7 @@ const SignupPage = () => {
     const { name, value } = event.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+    if (name === 'otp') setOtpError('');
   };
 
   return (
@@ -143,7 +155,14 @@ const SignupPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
                 <div className="relative">
                   <User size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="text" name="name" placeholder="Enter your full name" value={formData.name} onChange={handleChange} className="input-field pl-11" />
+                  <input 
+                    type="text" 
+                    name="name" 
+                    placeholder="Enter your full name" 
+                    value={formData.name} 
+                    onChange={handleChange} 
+                    className="input-field pl-11" 
+                  />
                 </div>
                 {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
               </div>
@@ -152,7 +171,14 @@ const SignupPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
                 <div className="relative">
                   <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="email" name="email" placeholder="Enter your email" value={formData.email} onChange={handleChange} className="input-field pl-11" />
+                  <input 
+                    type="email" 
+                    name="email" 
+                    placeholder="Enter your email" 
+                    value={formData.email} 
+                    onChange={handleChange} 
+                    className="input-field pl-11" 
+                  />
                 </div>
                 {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
               </div>
@@ -164,7 +190,15 @@ const SignupPage = () => {
                     <Phone size={18} className="text-gray-400" />
                     <span className="text-gray-400 text-sm">+91</span>
                   </div>
-                  <input type="tel" name="phone" placeholder="9876543210" value={formData.phone} onChange={handleChange} maxLength={10} className="input-field pl-20" />
+                  <input 
+                    type="tel" 
+                    name="phone" 
+                    placeholder="9876543210" 
+                    value={formData.phone} 
+                    onChange={handleChange} 
+                    maxLength={10} 
+                    className="input-field pl-20" 
+                  />
                 </div>
                 {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
               </div>
@@ -173,8 +207,19 @@ const SignupPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
                 <div className="relative">
                   <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type={showPassword ? 'text' : 'password'} name="password" placeholder="Create a strong password" value={formData.password} onChange={handleChange} className="input-field pl-11 pr-11" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    name="password" 
+                    placeholder="Create a strong password" 
+                    value={formData.password} 
+                    onChange={handleChange} 
+                    className="input-field pl-11" 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
@@ -185,13 +230,34 @@ const SignupPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm Password</label>
                 <div className="relative">
                   <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="password" name="confirmPassword" placeholder="Confirm your password" value={formData.confirmPassword} onChange={handleChange} className="input-field pl-11" />
+                  <input 
+                    type="password" 
+                    name="confirmPassword" 
+                    placeholder="Confirm your password" 
+                    value={formData.confirmPassword} 
+                    onChange={handleChange} 
+                    className="input-field pl-11" 
+                  />
                 </div>
                 {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>}
               </div>
 
-              <button type="submit" disabled={firebaseLoading} className="btn-primary w-full mt-6 flex items-center justify-center space-x-2">
-                {firebaseLoading ? <><div className="w-5 h-5 loading-spinner" /><span>Sending OTP...</span></> : <><span>Send OTP</span><ArrowRight size={18} /></>}
+              <button 
+                type="submit" 
+                disabled={firebaseLoading} 
+                className="btn-primary w-full mt-6 flex items-center justify-center space-x-2"
+              >
+                {firebaseLoading ? (
+                  <>
+                    <div className="w-5 h-5 loading-spinner" />
+                    <span>Sending OTP...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Send OTP</span>
+                    <ArrowRight size={18} />
+                  </>
+                )}
               </button>
             </form>
           ) : (
@@ -201,22 +267,65 @@ const SignupPage = () => {
                   <Phone size={28} className="text-green-600" />
                 </div>
                 <h2 className="text-lg font-bold text-gray-800">Verify Your Phone</h2>
-                <p className="text-gray-500 text-sm mt-1">We sent an OTP to <span className="font-semibold text-gray-800">+91 {formData.phone}</span></p>
+                <p className="text-gray-500 text-sm mt-1">
+                  We sent an OTP to <span className="font-semibold text-gray-800">+91 {formData.phone}</span>
+                </p>
               </div>
+
+              {/* Error message for OTP issues */}
+              {otpError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
+                  <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-red-800">{otpError}</p>
+                    <p className="text-xs text-red-600 mt-1">Check your phone number and internet connection. If OTP doesn't arrive, try requesting a new one.</p>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 text-center">Enter OTP</label>
-                <input type="text" name="otp" placeholder="Enter 6-digit OTP" value={formData.otp} onChange={handleChange} maxLength={6} className="input-field text-center text-3xl font-bold tracking-widest py-4" />
+                <input 
+                  type="text" 
+                  name="otp" 
+                  placeholder="Enter 6-digit OTP" 
+                  value={formData.otp} 
+                  onChange={handleChange} 
+                  maxLength={6} 
+                  className="input-field text-center text-3xl font-bold tracking-widest" 
+                />
                 {errors.otp && <p className="text-red-500 text-xs mt-1 text-center">{errors.otp}</p>}
               </div>
 
-              <button type="submit" disabled={firebaseLoading || signupLoading} className="btn-primary w-full flex items-center justify-center space-x-2">
-                {firebaseLoading || signupLoading ? <><div className="w-5 h-5 loading-spinner" /><span>Creating Account...</span></> : <><CheckCircle size={18} /><span>Verify & Create Account</span></>}
+              <button 
+                type="submit" 
+                disabled={firebaseLoading || signupLoading} 
+                className="btn-primary w-full flex items-center justify-center space-x-2"
+              >
+                {firebaseLoading || signupLoading ? (
+                  <>
+                    <div className="w-5 h-5 loading-spinner" />
+                    <span>Creating Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={18} />
+                    <span>Verify & Create Account</span>
+                  </>
+                )}
               </button>
 
-              <button type="button" onClick={() => setStep(1)} className="w-full inline-flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-gray-700">
+              <button 
+                type="button" 
+                onClick={() => {
+                  setStep(1);
+                  setOtpError('');
+                  setFormData(prev => ({ ...prev, otp: '' }));
+                }} 
+                className="w-full inline-flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+              >
                 <ArrowLeft size={14} />
-                Change details
+                Request new OTP
               </button>
             </form>
           )}
