@@ -35,7 +35,8 @@ const allowedOrigins = [
   'http://127.0.0.1:5173',
   process.env.FRONTEND_URL,
   ...(process.env.FRONTEND_URLS ? process.env.FRONTEND_URLS.split(',') : []),
-  'https://your-app.vercel.app'
+  'https://your-app.vercel.app',
+  'https://frontend-chi-one-tkznv76v1z.vercel.app'
 ].filter(Boolean).map((origin) => origin.trim());
 
 app.use(cors({
